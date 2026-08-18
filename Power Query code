@@ -1,0 +1,109 @@
+The following Power Query code can be used to retrieve the historical
+MSFT data:
+
+
+let
+    Source =
+        Json.Document(
+            Web.Contents(
+                "https://query1.finance.yahoo.com/v8/finance/chart/MSFT",
+                [
+                    Query = [
+                        period1 = "511056000",
+                        period2 = "1785801600",
+                        interval = "1d",
+                        events = "history",
+                        includeAdjustedClose = "true"
+                    ]
+                ]
+            )
+        ),
+
+    Chart = Source[chart],
+
+    Result = Chart[result]{0},
+
+    Timestamps = Result[timestamp],
+
+    Quote = Result[indicators][quote]{0},
+
+    AdjustedClose =
+        Result[indicators][adjclose]{0}[adjclose],
+
+    Data =
+        Table.FromColumns(
+            {
+                Timestamps,
+                Quote[open],
+                Quote[high],
+                Quote[low],
+                Quote[close],
+                AdjustedClose,
+                Quote[volume]
+            },
+            {
+                "Timestamp",
+                "Open",
+                "High",
+                "Low",
+                "Close",
+                "Adj Close",
+                "Volume"
+            }
+        ),
+
+    AddDate =
+        Table.AddColumn(
+            Data,
+            "Date",
+            each
+                DateTime.Date(
+                    #datetime(1970, 1, 1, 0, 0, 0)
+                    + #duration(0, 0, 0, [Timestamp])
+                ),
+            type date
+        ),
+
+    RemoveTimestamp =
+        Table.RemoveColumns(
+            AddDate,
+            {"Timestamp"}
+        ),
+
+    ReorderColumns =
+        Table.ReorderColumns(
+            RemoveTimestamp,
+            {
+                "Date",
+                "Open",
+                "High",
+                "Low",
+                "Close",
+                "Adj Close",
+                "Volume"
+            }
+        ),
+
+    ChangeTypes =
+        Table.TransformColumnTypes(
+            ReorderColumns,
+            {
+                {"Date", type date},
+                {"Open", type number},
+                {"High", type number},
+                {"Low", type number},
+                {"Close", type number},
+                {"Adj Close", type number},
+                {"Volume", Int64.Type}
+            }
+        ),
+
+    SortData =
+        Table.Sort(
+            ChangeTypes,
+            {
+                {"Date", Order.Ascending}
+            }
+        )
+in
+    SortData
